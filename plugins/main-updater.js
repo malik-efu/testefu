@@ -16,24 +16,24 @@ cmd({
     if (!isOwner) return reply("This command is only for the bot owner.");
 
     try {
-        await reply("🔍 Checking for DARKZONE-MD updates...");
+        await reply("🔍 Checking for DARKZONE updates...");
 
         // Fetch the latest commit hash from GitHub
-        const { data: commitData } = await axios.get("https://api.github.com/repos/ERFAN-Md/DARKZONE-MD/commits/main");
+        const { data: commitData } = await axios.get("https://api.github.com/repos/malik-efu/testefu/commits/main");
         const latestCommitHash = commitData.sha;
 
         // Get the stored commit hash from the database
         const currentHash = await getCommitHash();
 
         if (latestCommitHash === currentHash) {
-            return reply("✅ Your DARKZONE-MD bot is already up-to-date!");
+            return reply("✅ Your DARKZONE bot is already up-to-date!");
         }
 
-        await reply("🚀 Updating DARKZONE-MD Bot...");
+        await reply("🚀 Updating DARKZONE Bot...");
 
         // Download the latest code
         const zipPath = path.join(__dirname, "latest.zip");
-        const { data: zipData } = await axios.get("https://github.com/ERFAN-Md/DARKZONE-MD/archive/main.zip", { responseType: "arraybuffer" });
+        const { data: zipData } = await axios.get("https://github.com/malik-efu/testefu/archive/main.zip", { responseType: "arraybuffer" });
         fs.writeFileSync(zipPath, zipData);
 
         // Extract ZIP file
@@ -44,7 +44,7 @@ cmd({
 
         // Copy updated files, preserving config.js and app.json
         await reply("🔄 Replacing files...");
-        const sourcePath = path.join(extractPath, "DARKZONE-MD-main");
+        const sourcePath = path.join(extractPath, "testefu");
         const destinationPath = path.join(__dirname, '..');
         copyFolderSync(sourcePath, destinationPath);
 
