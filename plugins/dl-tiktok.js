@@ -4,7 +4,7 @@ const axios = require('axios');
 cmd({
     pattern: "tiktok",
     alias: ["tt", "ttdl"],
-    desc: "Download TikTok video using JawadTech API",
+    desc: "Download TikTok video",
     category: "downloader",
     react: "🎬",
     filename: __filename
