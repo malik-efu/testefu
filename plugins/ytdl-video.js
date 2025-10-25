@@ -1,53 +1,77 @@
-const config = require('../config');
 const { cmd } = require('../command');
 const yts = require('yt-search');
+const axios = require('axios');
 
 cmd({
-    pattern: "video2",
-    alias: ["mp4", "song"],
-    react: "🎥",
-    desc: "Download video from YouTube",
+    pattern: "ytmp4",
+    alias: ["video", "song", "ytv"],
+    desc: "Download YouTube videos",
     category: "download",
-    use: ".video <query or url>",
+    react: "📹",
     filename: __filename
-}, async (conn, m, mek, { from, q, reply }) => {
+}, async (conn, mek, m, { from, q, reply }) => {
     try {
-        if (!q) return await reply("❌ Please provide a video name or YouTube URL!");
+        if (!q) return await reply("🎥 Please provide a YouTube video name or URL!\n\nExample: `.video sad song`");
 
-        let videoUrl, title;
+        let url = q;
+        let videoInfo = null;
         
-        // Check if it's a URL
-        if (q.match(/(youtube\.com|youtu\.be)/)) {
-            videoUrl = q;
-            const videoInfo = await yts({ videoId: q.split(/[=/]/).pop() });
-            title = videoInfo.title;
+        // 🔍 Check if query is a URL or title
+        if (q.startsWith('http://') || q.startsWith('https://')) {
+            if (!q.includes("youtube.com") && !q.includes("youtu.be")) {
+                return await reply("❌ Please provide a valid YouTube URL!");
+            }
+            const videoId = getVideoId(q);
+            if (!videoId) return await reply("❌ Invalid YouTube URL!");
+            const searchFromUrl = await yts({ videoId: videoId });
+            videoInfo = searchFromUrl;
         } else {
-            // Search YouTube
             const search = await yts(q);
-            if (!search.videos.length) return await reply("❌ No results found!");
-            videoUrl = search.videos[0].url;
-            title = search.videos[0].title;
+            if (!search.videos || search.videos.length === 0) {
+                return await reply("❌ No video results found!");
+            }
+            videoInfo = search.videos[0];
+            url = videoInfo.url;
         }
 
-        await reply("⏳ Downloading video...");
+        // Helper: extract video ID
+        function getVideoId(url) {
+            const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+            return match ? match[1] : null;
+        }
 
-        // Use API to get video
-        const apiUrl = `https://apis.davidcyriltech.my.id/download/ytmp4?url=${encodeURIComponent(videoUrl)}`;
-        const response = await fetch(apiUrl);
-        const data = await response.json();
+        // 📸 Send video info thumbnail
+        if (videoInfo) {
+            await conn.sendMessage(from, {
+                image: { url: videoInfo.thumbnail },
+                caption: `🎬 *${videoInfo.title}*\n⏰ *Duration:* ${videoInfo.timestamp}\n👀 *Views:* ${videoInfo.views}\n\n> *📥 Downloading, please wait...*`
+            }, { quoted: mek });
+        }
 
-        if (!data.success) return await reply("❌ Failed to download video!");
+        // 🎬 Fetch video using NEW API
+        const api = `https://universe-api-mocha.vercel.app/api/tiktok/download?url=${encodeURIComponent(url)}`;
+        const res = await axios.get(api);
+        const data = res.data;
 
+        // Check if response contains download link
+        if (!data || !data.result || !data.result.video) {
+            return await reply("❌ Failed to fetch download link from API!");
+        }
+
+        const downloadUrl = data.result.video;
+        const title = data.result.title || videoInfo?.title || "YouTube Video";
+
+        // 🧾 Send downloaded video
         await conn.sendMessage(from, {
-            video: { url: data.result.download_url },
-            mimetype: 'video/mp4',
-            caption: `*${title}*`
+            video: { url: downloadUrl },
+            caption: `🎬 *${title}*\n📥 *Source:* YouTube\n\n> *✅ Download Completed!*`
         }, { quoted: mek });
 
-        await reply(`✅ *${title}* downloaded successfully!`);
+        await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
 
-    } catch (error) {
-        console.error(error);
-        await reply(`❌ Error: ${error.message}`);
+    } catch (e) {
+        console.error("❌ Error in .ytmp4:", e);
+        await reply("⚠️ Something went wrong! Try again later.");
+        await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
     }
 });
