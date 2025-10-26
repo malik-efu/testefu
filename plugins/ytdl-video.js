@@ -7,7 +7,7 @@ cmd({
     alias: ["video", "song", "ytv"],
     desc: "Download YouTube videos",
     category: "download",
-    react: "📹",
+    react: "🍺",
     filename: __filename
 }, async (conn, mek, m, { from, q, reply }) => {
     try {
@@ -16,16 +16,11 @@ cmd({
         let url = q;
         let videoInfo = null;
 
-        // 🔍 Check if query is a URL or title
+        // 🔍 Detect if query is a URL or a title
         if (q.startsWith('http://') || q.startsWith('https://')) {
             if (!q.includes("youtube.com") && !q.includes("youtu.be")) {
                 return await reply("❌ Please provide a valid YouTube URL!");
             }
-            const videoId = getVideoId(q);
-            if (!videoId) return await reply("❌ Invalid YouTube URL!");
-            
-            const searchFromUrl = await yts({ videoId: videoId });
-            videoInfo = searchFromUrl;
         } else {
             const search = await yts(q);
             if (!search.videos || search.videos.length === 0) {
@@ -35,37 +30,33 @@ cmd({
             url = videoInfo.url;
         }
 
-        // Helper function to extract video ID from URL
-        function getVideoId(url) {
-            const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
-            return match ? match[1] : null;
-        }
-
-        // 📸 Send thumbnail with title and downloading status
+        // 📸 Send a loading message
         if (videoInfo) {
             await conn.sendMessage(from, {
                 image: { url: videoInfo.thumbnail },
-                caption: `🎬 *${videoInfo.title}*\n⏰ *Duration:* ${videoInfo.timestamp}\n👀 *Views:* ${videoInfo.views}\n\n> *📥 Status: Downloading Please Wait...*`
+                caption: `🎬 *${videoInfo.title}*\n⏰ *Duration:* ${videoInfo.timestamp}\n👀 *Views:* ${videoInfo.views}\n\n> *📥 Status:* Downloading Please Wait...`
             }, { quoted: mek });
         }
 
-        // 🎬 Fetch video from NEW API
+        // 🎬 Use your new API
         const api = `https://universe-api-mocha.vercel.app/api/youtube/download?url=${encodeURIComponent(url)}`;
         const res = await axios.get(api);
         const data = res.data;
 
-        // ✅ Adjust according to your API response
-        const downloadUrl = data?.url || data?.download_url || data?.result?.url;
+        // ✅ Extract correct fields
+        const downloadUrl = data?.download || data?.url || data?.result?.download;
         const title = data?.title || videoInfo?.title || "YouTube Video";
         const quality = data?.quality || "360p";
-        const duration = data?.duration || videoInfo?.duration?.seconds || "N/A";
 
-        if (!downloadUrl) return await reply("❌ No download link found from the API!");
+        if (!downloadUrl) {
+            console.error("API Response:", data);
+            return await reply("❌ No download link found from the API! Please check if the API is returning a 'download' field.");
+        }
 
         // 🧾 Send the video
         await conn.sendMessage(from, {
             video: { url: downloadUrl },
-            caption: `🎬 *${title}*\n📥 *Quality:* ${quality}\n🕒 *Duration:* ${duration}\n\n> *✅ Download Completed!*\n\n> *DARKZONE-MD*`
+            caption: `🎬 *${title}*\n📥 *Quality:* ${quality}\n\n> *✅ Download Completed!*\n\n> *DARKZONE-MD*`
         }, { quoted: mek });
 
         await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
