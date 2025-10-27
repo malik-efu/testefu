@@ -50,49 +50,40 @@ async (conn, mek, m, { from, args, isCreator, reply }) => {
     }
 });
 
-cmd({ 
-  pattern: "setprefix", 
-  alias: ["prefix"], 
-  desc: "Change bot prefix.", 
-  category: "settings", 
-  filename: __filename 
-}, async (conn, mek, m, { from, args, isOwner, reply }) => { 
-  if (!isOwner) return reply("*📛 Only the owner can use this command!*"); 
-  if (!args[0]) return reply("❌ Please provide a new prefix."); 
+const fs = require("fs");
+const path = require("path");
+const configPath = path.join(__dirname, "../config.env");
+
+cmd({
+  pattern: "setprefix",
+  alias: ["prefix"],
+  desc: "Change bot prefix.",
+  category: "settings",
+  filename: __filename,
+}, async (conn, mek, m, { from, args, isOwner, reply }) => {
+  if (!isOwner) return reply("🚫 Only owner can use this command!");
+  if (!args[0]) return reply("❌ Please provide a new prefix. Example: .setprefix !");
+
+  const newPrefix = args[0].trim();
   
-  const newPrefix = args[0]; 
-  const envPath = path.join(__dirname, '../config.env');
-  
-  // Update PREFIX in config.env
-  let envData = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
-  if (envData.includes('PREFIX=')) {
-    envData = envData.replace(/PREFIX=.*/g, `PREFIX=${newPrefix}`);
+  // Update config.env file
+  let env = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf-8") : "";
+  if (env.includes("PREFIX=")) {
+    env = env.replace(/PREFIX=.*/g, `PREFIX=${newPrefix}`);
   } else {
-    envData += `\nPREFIX=${newPrefix}`;
+    env += `\nPREFIX=${newPrefix}`;
   }
-  fs.writeFileSync(envPath, envData);
+  fs.writeFileSync(configPath, env);
 
-  reply(`✅ *Prefix changed to:* \`${newPrefix}\``);
+  // Update runtime prefix instantly
+  require("../config").PREFIX = newPrefix;
 
-  // Try to restart the bot safely
-  const { exec } = require("child_process");
-  reply("*_DATABASE UPDATED — DARKZONE-MD RESTARTING NOW...🚀_*");
-  await sleep(1500);
+  reply(`✅ *Prefix successfully changed to:* \`${newPrefix}\``);
 
-  try {
-    // Try PM2 first
-    exec("pm2 restart all", (error) => {
-      if (error) {
-        // fallback for termux / node environments
-        exec("npm restart || node index.js", (err) => {
-          if (err) console.error("Restart failed:", err);
-        });
-      }
-    });
-  } catch (e) {
-    console.error("Restart error:", e);
-  }
+  // Custom React-style success feedback
+  await conn.sendMessage(from, { react: { text: "⚡", key: m.key } });
 });
+
 
 
 cmd({
