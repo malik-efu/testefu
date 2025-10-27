@@ -21,7 +21,10 @@ cmd({
   reply
 }) => {
   try {
-    if (!q || !q.startsWith("https://")) {
+    if (!q || !/(https?:\/\/)?(www\.)?(twitter\.com|x\.com)\//i.test(q)) {
+  return conn.sendMessage(from, { text: "❌ Please provide a valid Twitter or X URL." }, { quoted: m });
+}
+
       return conn.sendMessage(from, { text: "❌ Please provide a valid Twitter URL." }, { quoted: m });
     }
 
