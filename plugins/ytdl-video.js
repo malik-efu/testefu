@@ -1,43 +1,89 @@
-const { cmd, commands } = require('../command');
-const config = require('../config');
-const fs = require('fs');
-const path = require('path');
 
-const configPath = path.join(__dirname, "../config.env");
+
+const { cmd } = require('../command');
+const yts = require('yt-search');
+const axios = require('axios');
 
 cmd({
-  pattern: "setprefix",
-  alias: ["prefix"],
-  desc: "Change the bot command prefix.",
-  category: "settings",
-  filename: __filename,
-}, async (conn, mek, m, { args, isOwner, reply }) => {
-  try {
-    if (!isOwner) return reply("🚫 *Only owner can use this command!*");
-    if (!args[0]) return reply("❌ *Please provide a new prefix.*\n\nExample:\n.setprefix !");
+    pattern: "ytmp4",
+    alias: ["video", "song", "ytv"],
+    desc: "Download YouTube videos",
+    category: "download",
+    react: "📹",
+    filename: __filename
+}, async (conn, mek, m, { from, q, reply }) => {
+    try {
+        if (!q) return await reply("🎥 Please provide a YouTube video name or URL!\n\nExample: `.video sad song`");
 
-    const newPrefix = args[0].trim();
+        let url = q;
+        let videoInfo = null;
+        
+        // 🔍 Check if query is a URL or title
+        if (q.startsWith('http://') || q.startsWith('https://')) {
+            // It's a URL - use directly and fetch info
+            if (!q.includes("youtube.com") && !q.includes("youtu.be")) {
+                return await reply("❌ Please provide a valid YouTube URL!");
+            }
+            // Fetch video info for URL
+            const videoId = getVideoId(q);
+            if (!videoId) return await reply("❌ Invalid YouTube URL!");
+            
+            const searchFromUrl = await yts({ videoId: videoId });
+            videoInfo = searchFromUrl;
+        } else {
+            // It's a title - search for video
+            const search = await yts(q);
+            if (!search.videos || search.videos.length === 0) {
+                return await reply("❌ No video results found!");
+            }
+            videoInfo = search.videos[0];
+            url = videoInfo.url;
+        }
 
-    // ✅ Update config.env (persistent)
-    let envData = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf-8") : "";
-    if (envData.includes("PREFIX=")) {
-      envData = envData.replace(/PREFIX=.*/g, `PREFIX=${newPrefix}`);
-    } else {
-      envData += `\nPREFIX=${newPrefix}`;
+        // Helper function to extract video ID from URL
+        function getVideoId(url) {
+            const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+            return match ? match[1] : null;
+        }
+
+        // 📸 Send thumbnail with title and downloading status
+        if (videoInfo) {
+            await conn.sendMessage(from, {
+                image: { url: videoInfo.thumbnail },
+                caption: `🎬 *${videoInfo.title}*\n⏰ *Duration:* ${videoInfo.timestamp}\n👀 *Views:* ${videoInfo.views}\n> *📥 Status: Downloading Please Wait...*\n\n> *⏳ This may take a few seconds...*`
+            }, { quoted: mek });
+        }
+
+        // 🎬 Fetch video from API - CORRECTED API STRUCTURE
+        const api = `https://jawad-tech.vercel.app/download/ytdl?url=${encodeURIComponent(url)}&quality=360`;
+        const res = await axios.get(api);
+        const data = res.data;
+
+        // Check the actual API response structure
+        if (!data?.status) {
+            return await reply("❌ Failed to fetch download link from API!");
+        }
+
+        // Use the correct response structure based on your example
+        const downloadUrl = data.download;
+        const metadata = data.metadata;
+
+        if (!downloadUrl) {
+            return await reply("❌ No download URL found in API response!");
+        }
+
+        // 🧾 Send video with proper error handling
+        await conn.sendMessage(from, {
+            video: { url: downloadUrl },
+            caption: `🎬 *${metadata?.title || videoInfo?.title || 'YouTube Video'}*\n📥 *Quality:* ${data.quality || '360'}p\n🕒 *Duration:* ${metadata?.duration || videoInfo?.duration?.seconds || 'N/A'}s\n\n> *✅ Download Completed!*\n\n> *DARKZONE-MD*`
+        }, { quoted: mek });
+
+        // ✅ React success
+        await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
+
+    } catch (e) {
+        console.error("❌ Error in .ytmp4:", e);
+        await reply("⚠️ Something went wrong! Try again later.");
+        await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
     }
-    fs.writeFileSync(configPath, envData);
-
-    // ✅ Update runtime config instantly
-    config.PREFIX = newPrefix;
-    global.prefix = newPrefix; // make it live immediately
-    global.PREFIX = newPrefix; // for safety in case handler uses uppercase
-
-    // ✅ Confirmation message
-    await reply(`✅ *Prefix successfully changed to:* \`${newPrefix}\``);
-    await conn.sendMessage(m.chat, { react: { text: "⚡", key: m.key } });
-
-  } catch (err) {
-    console.error("❌ setprefix error:", err);
-    await reply("⚠️ *An error occurred while updating the prefix.*");
-  }
 });
