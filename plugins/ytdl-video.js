@@ -63,7 +63,7 @@ cmd({
             video: { url: mp4 },
             mimetype: 'video/mp4',
             fileName: `${title}.mp4`,
-            caption: `🎬 *${title}*\n✅ Download completed successfully!\n\n> Powered by *JawadTechXD*`
+            caption: `🎬 *${title}*\n> ✅ Download completed successfully!\n\n> *DARKZONE-MD*`
         }, { quoted: mek });
 
         // Success reaction
