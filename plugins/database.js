@@ -56,55 +56,28 @@ cmd({
   desc: "Change bot prefix.", 
   category: "settings", 
   filename: __filename 
-}, async (conn, mek, m, { 
-  from, 
-  args, 
-  isOwner, 
-  reply 
-}) => { 
+}, async (conn, mek, m, { from, args, isOwner, reply }) => { 
   if (!isOwner) return reply("*📛 Only the owner can use this command!*"); 
   if (!args[0]) return reply("❌ Please provide a new prefix."); 
+  
   const newPrefix = args[0]; 
-  config.PREFIX = newPrefix; 
-  // Save config to file 
-  fs.writeFileSync('./config.json', JSON.stringify(config, null, 2)); 
-  reply(`*Prefix changed to:* ${newPrefix}`); 
-  const { exec } = require("child_process"); 
-  reply("*_DATABASE UPDATE DARKZONE-MD RESTARTING NOW...🚀_*"); 
-  await sleep(1500); 
-  exec("pm2 restart all"); 
-  reply("*_DARKZONE-MD STARTED NOW...🚀_*"); 
-});
+  const envPath = path.join(__dirname, '../config.env');
+  
+  // Update or add PREFIX in config.env
+  let envData = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
+  if (envData.includes('PREFIX=')) {
+    envData = envData.replace(/PREFIX=.*/g, `PREFIX=${newPrefix}`);
+  } else {
+    envData += `\nPREFIX=${newPrefix}`;
+  }
+  fs.writeFileSync(envPath, envData);
 
-cmd({
-    pattern: "mode",
-    desc: "Set bot mode to private or public.",
-    category: "settings",
-    filename: __filename,
-}, async (conn, mek, m, { from, args, isOwner, reply }) => {
-    if (!isOwner) return reply("*📛 Only the owner can use this command!*");
-
-    // Si aucun argument n'est fourni, afficher le mode actuel et l'usage
-    if (!args[0]) {
-        return reply(`📌 Current mode: *${config.MODE}*\n\nUsage: .mode private OR .mode public`);
-    }
-
-    const modeArg = args[0].toLowerCase();
-
-    if (modeArg === "private") {
-        config.MODE = "private";
-        return reply("*_BOT MODE IS NOW SET TO PRIVATE ✅_*.");
-    } else if (modeArg === "public") {
-        config.MODE = "public";
-        return reply("*_BOT MODE IS NOW SET TO PUBLIC ✅_*.")
-        const {exec} = require("child_process")
-reply("*_DATABASE UPDATE DARKZONE-MD RESTARTING NOW...🚀_*")
-await sleep(1500)
-exec("pm2 restart all")
-reply("*_DARKZONE-MD STARTED NOW...🚀_*");
-    } else {
-        return reply("❌ Invalid mode. Please use `.mode private` or `.mode public`.");
-    }
+  reply(`✅ *Prefix changed to:* \`${newPrefix}\``);
+  
+  const { exec } = require("child_process");
+  reply("*_DATABASE UPDATED — DARKZONE-MD RESTARTING NOW...🚀_*");
+  await sleep(1500);
+  exec("pm2 restart all");
 });
 
 cmd({
