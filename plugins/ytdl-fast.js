@@ -7,59 +7,44 @@ const axios = require("axios");
 const { cmd, commands } = require('../command');
 
 // twitter-dl
-
 cmd({
-  pattern: "twitte",
+  pattern: "twitt",
   alias: ["tweet", "twdl"],
   desc: "Download Twitter videos",
   category: "download",
   filename: __filename
-}, async (conn, m, store, {
-  from,
-  quoted,
-  q,
-  reply
-}) => {
+}, async (conn, m, store, { from, quoted, q, reply }) => {
   try {
+    // ✅ Validate URL
     if (!q || !/(https?:\/\/)?(www\.)?(twitter\.com|x\.com)\//i.test(q)) {
-  return conn.sendMessage(from, { text: "❌ Please provide a valid Twitter or X URL." }, { quoted: m });
-}
-
-
-    await conn.sendMessage(from, {
-      react: { text: '⏳', key: m.key }
-    });
-
-    // 🔹 Updated API URL
-    // Working Twitter API (tested)
-const response = await axios.get(`https://api.ryzendesu.vip/api/downloader/twitter?url=${q}`);
-const data = response.data;
-
-if (!data || !data.status || !data.result) {
-  return reply("⚠️ Failed to retrieve Twitter video. Please check the link and try again.");
-}
-
-const { hd, sd, thumb } = data.result;
-
-
-    // Adjusting to possible response structure from new API
-    const videoData = data.result.media[0] || {};
-    const videoUrl = videoData.url || null;
-    const thumb = data.result.thumbnail || null;
-    const desc = data.result.title || "No description available";
-
-    if (!videoUrl) {
-      return reply("⚠️ Couldn't find any downloadable video in the provided link.");
+      return conn.sendMessage(from, { text: "❌ Please provide a valid Twitter or X URL." }, { quoted: m });
     }
 
+    await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
+
+    // ✅ Fetch data from working API
+    const response = await axios.get(`https://api.ryzendesu.vip/api/downloader/twitter?url=${q}`);
+    const data = response.data;
+
+    if (!data || !data.status || !data.result) {
+      return reply("⚠️ Failed to retrieve Twitter video. Please check the link and try again.");
+    }
+
+    // ✅ Extract video information
+    const { hd, sd, thumb } = data.result;
+    const video_hd = hd || sd;
+    const video_sd = sd || hd;
+    const desc = "Downloaded via Twitter Downloader";
+
+    // ✅ Send menu
     const caption = `╭━━━〔 *TWITTER DOWNLOADER* 〕━━━⊷\n`
       + `┃▸ *Description:* ${desc}\n`
       + `╰━━━⪼\n\n`
       + `📹 *Download Options:*\n`
-      + `1️⃣  *Video*\n`
-      + `2️⃣  *Audio*\n`
-      + `3️⃣  *Document*\n`
-      + `4️⃣  *Voice*\n\n`
+      + `1️⃣  *SD Quality*\n`
+      + `2️⃣  *HD Quality*\n`
+      + `3️⃣  *Audio*\n`
+      + `4️⃣  *Voice Note*\n\n`
       + `📌 *Reply with the number to download your choice.*`;
 
     const sentMsg = await conn.sendMessage(from, {
@@ -69,6 +54,7 @@ const { hd, sd, thumb } = data.result;
 
     const messageID = sentMsg.key.id;
 
+    // ✅ Listen for replies
     conn.ev.on("messages.upsert", async (msgData) => {
       const receivedMsg = msgData.messages[0];
       if (!receivedMsg.message) return;
@@ -78,37 +64,33 @@ const { hd, sd, thumb } = data.result;
       const isReplyToBot = receivedMsg.message.extendedTextMessage?.contextInfo?.stanzaId === messageID;
 
       if (isReplyToBot) {
-        await conn.sendMessage(senderID, {
-          react: { text: '⬇️', key: receivedMsg.key }
-        });
+        await conn.sendMessage(senderID, { react: { text: '⬇️', key: receivedMsg.key } });
 
         switch (receivedText) {
           case "1":
             await conn.sendMessage(senderID, {
-              video: { url: videoUrl },
-              caption: "📥 *Downloaded Video Successfully!*"
+              video: { url: video_sd },
+              caption: "📥 *Downloaded in SD Quality*"
             }, { quoted: receivedMsg });
             break;
 
           case "2":
             await conn.sendMessage(senderID, {
-              audio: { url: videoUrl },
-              mimetype: "audio/mpeg"
+              video: { url: video_hd },
+              caption: "📥 *Downloaded in HD Quality*"
             }, { quoted: receivedMsg });
             break;
 
           case "3":
             await conn.sendMessage(senderID, {
-              document: { url: videoUrl },
-              mimetype: "audio/mpeg",
-              fileName: "Twitter_Audio.mp3",
-              caption: "📥 *Audio Downloaded as Document*"
+              audio: { url: video_sd },
+              mimetype: "audio/mpeg"
             }, { quoted: receivedMsg });
             break;
 
           case "4":
             await conn.sendMessage(senderID, {
-              audio: { url: videoUrl },
+              audio: { url: video_sd },
               mimetype: "audio/mp4",
               ptt: true
             }, { quoted: receivedMsg });
