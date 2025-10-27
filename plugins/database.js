@@ -63,7 +63,7 @@ cmd({
   const newPrefix = args[0]; 
   const envPath = path.join(__dirname, '../config.env');
   
-  // Update or add PREFIX in config.env
+  // Update PREFIX in config.env
   let envData = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
   if (envData.includes('PREFIX=')) {
     envData = envData.replace(/PREFIX=.*/g, `PREFIX=${newPrefix}`);
@@ -73,12 +73,27 @@ cmd({
   fs.writeFileSync(envPath, envData);
 
   reply(`✅ *Prefix changed to:* \`${newPrefix}\``);
-  
+
+  // Try to restart the bot safely
   const { exec } = require("child_process");
   reply("*_DATABASE UPDATED — DARKZONE-MD RESTARTING NOW...🚀_*");
   await sleep(1500);
-  exec("pm2 restart all");
+
+  try {
+    // Try PM2 first
+    exec("pm2 restart all", (error) => {
+      if (error) {
+        // fallback for termux / node environments
+        exec("npm restart || node index.js", (err) => {
+          if (err) console.error("Restart failed:", err);
+        });
+      }
+    });
+  } catch (e) {
+    console.error("Restart error:", e);
+  }
 });
+
 
 cmd({
     pattern: "auto_typing",
