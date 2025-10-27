@@ -31,12 +31,16 @@ cmd({
     });
 
     // 🔹 Updated API URL
-    const response = await axios.get(`https://universe-api-mocha.vercel.app/api/twitter/download?url=${q}`);
-    const data = response.data;
+    // Working Twitter API (tested)
+const response = await axios.get(`https://api.ryzendesu.vip/api/downloader/twitter?url=${q}`);
+const data = response.data;
 
-    if (!data || !data.result || !data.result.media) {
-      return reply("⚠️ Failed to retrieve Twitter video. Please check the link and try again.");
-    }
+if (!data || !data.status || !data.result) {
+  return reply("⚠️ Failed to retrieve Twitter video. Please check the link and try again.");
+}
+
+const { hd, sd, thumb } = data.result;
+
 
     // Adjusting to possible response structure from new API
     const videoData = data.result.media[0] || {};
