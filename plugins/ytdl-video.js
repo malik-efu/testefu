@@ -1,89 +1,138 @@
-
-
 const { cmd } = require('../command');
 const yts = require('yt-search');
 const axios = require('axios');
 
 cmd({
-    pattern: "ytmp4",
-    alias: ["video", "song", "ytv"],
-    desc: "Download YouTube videos",
+    pattern: "ytdl",
+    alias: ["yt", "ytvideo", "ytmusic"],
+    desc: "Download YouTube videos or audios using JawadTech API",
     category: "download",
-    react: "📹",
+    react: "🎧",
     filename: __filename
 }, async (conn, mek, m, { from, q, reply }) => {
     try {
-        if (!q) return await reply("🎥 Please provide a YouTube video name or URL!\n\nExample: `.video sad song`");
+        if (!q) return await reply("🎬 Please provide a YouTube video name or URL!\n\nExample: `.ytdl Alan Walker - Faded`");
 
         let url = q;
         let videoInfo = null;
-        
-        // 🔍 Check if query is a URL or title
+
+        // Check if query is a valid YouTube URL or search keyword
         if (q.startsWith('http://') || q.startsWith('https://')) {
-            // It's a URL - use directly and fetch info
             if (!q.includes("youtube.com") && !q.includes("youtu.be")) {
                 return await reply("❌ Please provide a valid YouTube URL!");
             }
-            // Fetch video info for URL
             const videoId = getVideoId(q);
             if (!videoId) return await reply("❌ Invalid YouTube URL!");
-            
             const searchFromUrl = await yts({ videoId: videoId });
             videoInfo = searchFromUrl;
         } else {
-            // It's a title - search for video
             const search = await yts(q);
             if (!search.videos || search.videos.length === 0) {
-                return await reply("❌ No video results found!");
+                return await reply("❌ No results found!");
             }
             videoInfo = search.videos[0];
             url = videoInfo.url;
         }
 
-        // Helper function to extract video ID from URL
+        // Helper: extract video ID
         function getVideoId(url) {
             const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
             return match ? match[1] : null;
         }
 
-        // 📸 Send thumbnail with title and downloading status
-        if (videoInfo) {
-            await conn.sendMessage(from, {
-                image: { url: videoInfo.thumbnail },
-                caption: `🎬 *${videoInfo.title}*\n⏰ *Duration:* ${videoInfo.timestamp}\n👀 *Views:* ${videoInfo.views}\n> *📥 Status: Downloading Please Wait...*\n\n> *⏳ This may take a few seconds...*`
-            }, { quoted: mek });
-        }
+        // Send video info first
+        await conn.sendMessage(from, {
+            image: { url: videoInfo.thumbnail },
+            caption: `🎬 *${videoInfo.title}*\n⏰ *Duration:* ${videoInfo.timestamp}\n👁️ *Views:* ${videoInfo.views}\n\n> ⏳ *Downloading, please wait...*`
+        }, { quoted: mek });
 
-        // 🎬 Fetch video from API - CORRECTED API STRUCTURE
-        const api = `https://jawad-tech.vercel.app/download/ytdl?url=${encodeURIComponent(url)}&quality=360`;
+        // Call your API
+        const api = `https://jawad-tech.vercel.app/download/ytdl?url=${encodeURIComponent(url)}`;
         const res = await axios.get(api);
         const data = res.data;
 
-        // Check the actual API response structure
-        if (!data?.status) {
-            return await reply("❌ Failed to fetch download link from API!");
+        // Check API response
+        if (!data?.status || !data?.result) {
+            return await reply("❌ Failed to fetch from API! Please try again.");
         }
 
-        // Use the correct response structure based on your example
-        const downloadUrl = data.download;
-        const metadata = data.metadata;
+        const { title, mp3, mp4 } = data.result;
 
-        if (!downloadUrl) {
-            return await reply("❌ No download URL found in API response!");
-        }
+        // Send both audio & video buttons
+        const buttons = [
+            { buttonId: `.ytdlmp3 ${url}`, buttonText: { displayText: "🎵 MP3 Audio" }, type: 1 },
+            { buttonId: `.ytdlmp4 ${url}`, buttonText: { displayText: "🎥 MP4 Video" }, type: 1 }
+        ];
 
-        // 🧾 Send video with proper error handling
         await conn.sendMessage(from, {
-            video: { url: downloadUrl },
-            caption: `🎬 *${metadata?.title || videoInfo?.title || 'YouTube Video'}*\n📥 *Quality:* ${data.quality || '360'}p\n🕒 *Duration:* ${metadata?.duration || videoInfo?.duration?.seconds || 'N/A'}s\n\n> *✅ Download Completed!*\n\n> *DARKZONE-MD*`
+            image: { url: videoInfo.thumbnail },
+            caption: `🎬 *${title}*\n\nChoose format to download:`,
+            buttons,
+            headerType: 4
         }, { quoted: mek });
 
-        // ✅ React success
-        await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
-
-    } catch (e) {
-        console.error("❌ Error in .ytmp4:", e);
+    } catch (err) {
+        console.error("❌ Error in .ytdl command:", err);
         await reply("⚠️ Something went wrong! Try again later.");
-        await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
+    }
+});
+
+// 🎵 MP3 downloader command
+cmd({
+    pattern: "ytdlmp3",
+    desc: "Download YouTube audio via JawadTech API",
+    category: "download",
+    react: "🎵",
+    filename: __filename
+}, async (conn, mek, m, { from, q, reply }) => {
+    try {
+        if (!q) return await reply("🎧 Please provide a YouTube URL!");
+        const api = `https://jawad-tech.vercel.app/download/ytdl?url=${encodeURIComponent(q)}`;
+        const res = await axios.get(api);
+        const data = res.data;
+
+        if (!data?.status) return await reply("❌ API error!");
+        const { title, mp3 } = data.result;
+
+        await conn.sendMessage(from, {
+            audio: { url: mp3 },
+            mimetype: 'audio/mpeg',
+            fileName: `${title}.mp3`,
+            caption: `🎶 *${title}*\n\n✅ Downloaded successfully!`
+        }, { quoted: mek });
+
+    } catch (err) {
+        console.error("❌ Error in .ytdlmp3:", err);
+        await reply("⚠️ Failed to download audio!");
+    }
+});
+
+// 🎥 MP4 downloader command
+cmd({
+    pattern: "video",
+    desc: "Download YouTube video via JawadTech API",
+    category: "download",
+    react: "🎥",
+    filename: __filename
+}, async (conn, mek, m, { from, q, reply }) => {
+    try {
+        if (!q) return await reply("🎬 Please provide a YouTube URL!");
+        const api = `https://jawad-tech.vercel.app/download/ytdl?url=${encodeURIComponent(q)}`;
+        const res = await axios.get(api);
+        const data = res.data;
+
+        if (!data?.status) return await reply("❌ API error!");
+        const { title, mp4 } = data.result;
+
+        await conn.sendMessage(from, {
+            video: { url: mp4 },
+            mimetype: 'video/mp4',
+            fileName: `${title}.mp4`,
+            caption: `🎬 *${title}*\n\n✅ Downloaded successfully!`
+        }, { quoted: mek });
+
+    } catch (err) {
+        console.error("❌ Error in .ytdlmp4:", err);
+        await reply("⚠️ Failed to download video!");
     }
 });
