@@ -1,10 +1,10 @@
-const { cmd } = require('../command');
+const { cmd, commands } = require('../command');
 const config = require('../config');
 const fs = require('fs');
 const path = require('path');
 
-const configPath = path.join(__dirname, '../config.env');
-
+// ✅ Define config.env path properly
+const configPath = path.join(__dirname, "../config.env");
 cmd({
   pattern: "setprefix",
   alias: ["prefix"],
