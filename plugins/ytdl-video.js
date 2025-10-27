@@ -1,10 +1,7 @@
-const { cmd, commands } = require('../command');
+const { cmd } = require('../command');
 const config = require('../config');
 const fs = require('fs');
 const path = require('path');
-
-// ✅ Define config.env path properly
-const configPath = path.join(__dirname, "../config.env");
 
 cmd({
   pattern: "setmenuimg",
@@ -13,38 +10,38 @@ cmd({
   category: "settings",
   filename: __filename,
 }, async (conn, mek, m, { args, isOwner, reply }) => {
+  if (!isOwner) return reply("🚫 *Only the owner can use this command!*");
 
-  // ✅ Owner check
-  if (!isOwner) return reply("🚫 *Only owner can use this command!*");
-
-  // ✅ Argument check
   if (!args[0]) return reply("❌ *Please provide a new image URL.*\n\nExample:\n.setmenuimg https://files.catbox.moe/abcd12.jpg");
 
   const newUrl = args[0].trim();
-
-  // ✅ Optional URL validation
-  if (!/^https?:\/\//i.test(newUrl)) return reply("⚠️ *Invalid URL!*\nPlease provide a valid https:// link.");
+  const configPath = path.join(__dirname, '..', 'config.env');
 
   try {
-    // ✅ Read and update config.env safely
-    let envData = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf-8") : "";
-    if (envData.includes("MENU_IMAGE_URL=")) {
+    // ✅ Read existing env file
+    let envData = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf-8') : '';
+
+    // ✅ Update or append the MENU_IMAGE_URL
+    if (envData.includes('MENU_IMAGE_URL=')) {
       envData = envData.replace(/MENU_IMAGE_URL=.*/g, `MENU_IMAGE_URL=${newUrl}`);
     } else {
       envData += `\nMENU_IMAGE_URL=${newUrl}`;
     }
+
+    // ✅ Write updated data back
     fs.writeFileSync(configPath, envData);
 
-    // ✅ Update running config instantly (no restart)
+    // ✅ Update in-memory config instantly
     config.MENU_IMAGE_URL = newUrl;
 
     // ✅ Confirmation message
-    await reply(`✅ *Menu image updated successfully!*\n🖼️ *New Image:* ${newUrl}`);
+    await reply(`✅ *Menu image URL updated successfully!*\n🖼️ New Image: ${newUrl}`);
 
-    // ✅ React emoji feedback
+    // ✅ Add reaction
     await conn.sendMessage(m.chat, { react: { text: "⚡", key: m.key } });
+
   } catch (err) {
-    console.error("Error updating menu image:", err);
-    return reply("❌ *An error occurred while updating the menu image.*");
+    console.error(err);
+    await reply("❌ *Failed to update menu image URL.*");
   }
 });
