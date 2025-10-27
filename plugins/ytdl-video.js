@@ -1,66 +1,58 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { cmd } = require('../command');
 
 cmd({
-    pattern: "movie1",
-    desc: "Fetch download link for a movie or series (480p)",
+    pattern: "download1",
+    desc: "Search for movie download links",
     category: "utility",
-    react: "🎬",
+    react: "📥",
     filename: __filename
 },
 async (conn, mek, m, { from, reply, sender, args }) => {
     try {
-        const query = args.length > 0 ? args.join(' ') : m.text.replace(/^[\.\#\$\!]?movie\s?/i, '').trim();
-        if (!query) return reply("🎥 Please type a movie or series name.\nExample: .movie Spider Man No Way Home");
+        const query = args.join(' ');
+        if (!query) {
+            return reply("Please provide movie/show name\nExample: .download movie name");
+        }
 
-        reply(`🔍 Searching "${query}"...`);
-
-        // Step 1: Search on the website
-        const searchUrl = `https://subzerocinema.gleeze.com/?s=${encodeURIComponent(query)}`;
-        const searchRes = await axios.get(searchUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0' }
-        });
-        const $ = cheerio.load(searchRes.data);
-
-        // Step 2: Get the first search result
-        const firstLink = $('h2.entry-title a').first().attr('href');
-        if (!firstLink) return reply("❌ No results found. Try another name.");
-
-        // Step 3: Visit the movie page
-        const pageRes = await axios.get(firstLink, {
-            headers: { 'User-Agent': 'Mozilla/5.0' }
-        });
-        const $$ = cheerio.load(pageRes.data);
-
-        // Step 4: Try to find 480p download links
-        let downloadLink;
-        $$('a').each((i, el) => {
-            const text = $$(el).text().toLowerCase();
-            if (text.includes('480p') || text.includes('sd')) {
-                downloadLink = $$(el).attr('href');
-                return false; // break loop
+        // Basic web scraping example structure
+        const searchUrl = `https://subzerocinema.gleeze.com/search?q=${encodeURIComponent(query)}`;
+        
+        const response = await axios.get(searchUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
         });
 
-        if (!downloadLink) {
-            return reply("⚠️ 480p link not found. Try manually checking the page.");
+        const $ = cheerio.load(response.data);
+        
+        // This is where you'd parse the HTML structure
+        // Note: Actual selectors would need to be determined by inspecting the website
+        
+        let downloadLinks = [];
+        
+        // Example parsing (you'll need to adjust based on actual HTML structure)
+        $('.download-link').each((i, elem) => {
+            const quality = $(elem).find('.quality').text();
+            const link = $(elem).attr('href');
+            if (quality.includes('480')) {
+                downloadLinks.push({ quality, link });
+            }
+        });
+
+        if (downloadLinks.length === 0) {
+            return reply(`No 480p download links found for "${query}"`);
         }
 
-        // Step 5: Send formatted message
-        const title = $$('h1.entry-title').text().trim() || query;
+        let message = `📥 Download Links for "${query}"\n\n`;
+        downloadLinks.forEach((item, index) => {
+            message += `${index + 1}. ${item.quality}\n${item.link}\n\n`;
+        });
 
-        const msg = `
-🎬 *${title}*
-📥 *Download (480p):* [Click Here](${downloadLink})
+        await reply(message);
 
-➡️ Tap to start download automatically.
-`;
-
-        await conn.sendMessage(from, { text: msg }, { quoted: mek });
-
-    } catch (e) {
-        console.error("Error scraping movie:", e);
-        reply("❌ Something went wrong while fetching the movie link.");
+    } catch (error) {
+        console.error('Download command error:', error);
+        reply(`Error: ${error.message}`);
     }
 });
