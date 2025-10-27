@@ -25,8 +25,6 @@ cmd({
   return conn.sendMessage(from, { text: "❌ Please provide a valid Twitter or X URL." }, { quoted: m });
 }
 
-      return conn.sendMessage(from, { text: "❌ Please provide a valid Twitter URL." }, { quoted: m });
-    }
 
     await conn.sendMessage(from, {
       react: { text: '⏳', key: m.key }
