@@ -3,8 +3,8 @@ const config = require('../config');
 const fs = require('fs');
 const path = require('path');
 
-// ✅ Define config.env path properly
 const configPath = path.join(__dirname, "../config.env");
+
 cmd({
   pattern: "setprefix",
   alias: ["prefix"],
@@ -18,7 +18,7 @@ cmd({
 
     const newPrefix = args[0].trim();
 
-    // ✅ Read and update config.env
+    // ✅ Update config.env (persistent)
     let envData = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf-8") : "";
     if (envData.includes("PREFIX=")) {
       envData = envData.replace(/PREFIX=.*/g, `PREFIX=${newPrefix}`);
@@ -27,10 +27,12 @@ cmd({
     }
     fs.writeFileSync(configPath, envData);
 
-    // ✅ Update in-memory config
+    // ✅ Update runtime config instantly
     config.PREFIX = newPrefix;
+    global.prefix = newPrefix; // make it live immediately
+    global.PREFIX = newPrefix; // for safety in case handler uses uppercase
 
-    // ✅ Confirm success
+    // ✅ Confirmation message
     await reply(`✅ *Prefix successfully changed to:* \`${newPrefix}\``);
     await conn.sendMessage(m.chat, { react: { text: "⚡", key: m.key } });
 
