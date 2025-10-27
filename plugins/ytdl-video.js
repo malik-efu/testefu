@@ -3,32 +3,33 @@ const path = require("path");
 const configPath = path.join(__dirname, "../config.env");
 
 cmd({
-  pattern: "setprefix",
-  alias: ["prefix"],
-  desc: "Change bot prefix.",
+  pattern: "setmenuimg",
+  alias: ["menuimg", "setmenu"],
+  desc: "Change the bot menu image URL.",
   category: "settings",
   filename: __filename,
 }, async (conn, mek, m, { args, isOwner, reply }) => {
   if (!isOwner) return reply("🚫 *Only owner can use this command!*");
-  if (!args[0]) return reply("❌ *Please provide a new prefix.*\n\nExample: .setprefix !");
+  if (!args[0]) return reply("❌ *Please provide a new image URL.*\n\nExample:\n.setmenuimg https://files.catbox.moe/abcd12.jpg");
 
-  const newPrefix = args[0].trim();
+  const newUrl = args[0].trim();
 
   // ✅ Update config.env file safely
   let envData = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf-8") : "";
-  if (envData.includes("PREFIX=")) {
-    envData = envData.replace(/PREFIX=.*/g, `PREFIX=${newPrefix}`);
+  if (envData.includes("MENU_IMAGE_URL=")) {
+    envData = envData.replace(/MENU_IMAGE_URL=.*/g, `MENU_IMAGE_URL=${newUrl}`);
   } else {
-    envData += `\nPREFIX=${newPrefix}`;
+    envData += `\nMENU_IMAGE_URL=${newUrl}`;
   }
   fs.writeFileSync(configPath, envData);
 
-  // ✅ Update in-memory prefix instantly (no restart)
+  // ✅ Update in-memory config (no restart)
   const config = require("../config");
-  config.PREFIX = newPrefix;
+  config.MENU_IMAGE_URL = newUrl;
 
-  // ✅ Respond like your normal commands
-  await reply(`✅ *Prefix successfully changed to:* \`${newPrefix}\``);
+  // ✅ Confirm message
+  await reply(`✅ *Menu image updated successfully!*\n🖼️ *New Image:* ${newUrl}`);
+
+  // ✅ Add emoji react like your other commands
   await conn.sendMessage(m.chat, { react: { text: "⚡", key: m.key } });
 });
-
