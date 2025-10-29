@@ -13,42 +13,65 @@ cmd({
   reply
 }) => {
   try {
-    // Only act in groups where bot is admin and sender isn't admin
+    // Only run in groups where bot is admin and sender isn't admin
     if (!isGroup || isAdmins || !isBotAdmins) return;
 
-    // 🔥 Universal link detection regex (matches any domain or link)
-    const universalLinkRegex = /\b((https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,})(\/\S*)?/gi;
+    // 🧠 Regex for all domain types (.com, .io, .net, etc.)
+    const allLinksRegex = /\b((https?:\/\/)?(www\.)?([a-z0-9-]+\.)+[a-z]{2,})(\/\S*)?/gi;
 
-    // ✅ Detect group invite links (WhatsApp group)
-    const waGroupRegex = /chat\.whatsapp\.com\/[A-Za-z0-9]+/gi;
+    // 🔗 WhatsApp group & channel link regex (for kicking)
+    const waDangerLinks = /(chat\.whatsapp\.com\/[A-Za-z0-9]+|whatsapp\.com\/channel\/[A-Za-z0-9]+)/gi;
 
-    // Check if message contains any type of link or domain
-    const containsLink = universalLinkRegex.test(body) || waGroupRegex.test(body);
+    const hasAnyLink = allLinksRegex.test(body);
+    const hasWaDangerLink = waDangerLinks.test(body);
 
-    // Proceed only if anti-link is enabled
-    if (containsLink && config.ANTI_LINK === 'true') {
-      console.log(`🚫 Link detected from ${sender}: ${body}`);
+    // Only continue if ANTI_LINK is enabled
+    if (config.ANTI_LINK !== 'true') return;
 
-      // 🗑 Try to delete the message
+    if (hasWaDangerLink) {
+      // 🚨 WhatsApp group or channel link detected — delete + kick
+      console.log(`🚫 WhatsApp link detected from ${sender}: ${body}`);
+
+      // Try to delete message
       try {
         await conn.sendMessage(from, { delete: m.key });
-        console.log(`✅ Message deleted: ${m.key.id}`);
+        console.log(`✅ Message deleted (WhatsApp link)`);
+      } catch (error) {
+        console.error("❌ Failed to delete WhatsApp link message:", error);
+      }
+
+      // Notify group
+      await conn.sendMessage(from, {
+        text: `🚨 *FORBIDDEN LINK DETECTED!* 🚨\n@${sender.split('@')[0]} shared a *WhatsApp group/channel link!* 😡\n\nUser has been removed from this group.`,
+        mentions: [sender]
+      });
+
+      // Kick user
+      await conn.groupParticipantsUpdate(from, [sender], "remove");
+      console.log(`👢 User removed: ${sender}`);
+    }
+
+    else if (hasAnyLink) {
+      // 🌐 Other normal links (delete only)
+      console.log(`🌍 Regular link detected from ${sender}: ${body}`);
+
+      // Try to delete
+      try {
+        await conn.sendMessage(from, { delete: m.key });
+        console.log(`✅ Message deleted (normal link)`);
       } catch (error) {
         console.error("❌ Failed to delete message:", error);
       }
 
-      // ⚠️ Notify and kick user
+      // Warn user (no kick)
       await conn.sendMessage(from, {
-        text: `🚨 *LINK DETECTED!* 🚨\n\n@${sender.split('@')[0]} sent a forbidden link!\n\n🔒 Links are not allowed in this group.`,
+        text: `⚠️ @${sender.split('@')[0]}, links are *not allowed* here!\nYour message has been deleted.`,
         mentions: [sender]
       });
-
-      await conn.groupParticipantsUpdate(from, [sender], "remove");
-
-      console.log(`👢 User removed: ${sender}`);
     }
+
   } catch (error) {
     console.error("Anti-link error:", error);
-    reply("❌ An error occurred while processing anti-link.");
+    reply("❌ Error while checking link message.");
   }
 });
