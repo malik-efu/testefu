@@ -2,7 +2,7 @@ const { cmd } = require('../command');
 const config = require("../config");
 
 cmd({
-  'on': "body"
+  on: "body"
 }, async (conn, m, store, {
   from,
   body,
@@ -14,55 +14,41 @@ cmd({
 }) => {
   try {
     // Only act in groups where bot is admin and sender isn't admin
-    if (!isGroup || isAdmins || !isBotAdmins) {
-      return;
-    }
+    if (!isGroup || isAdmins || !isBotAdmins) return;
 
-    // List of link patterns to detect
-    const linkPatterns = [
-      /https?:\/\/(?:chat\.whatsapp\.com|wa\.me)\/\S+/gi, // WhatsApp links
-      /https?:\/\/(?:api\.whatsapp\.com|wa\.me)\/\S+/gi,  // WhatsApp API links
-      /wa\.me\/\S+/gi,                                    // WhatsApp.me links
-      /https?:\/\/(?:t\.me|telegram\.me)\/\S+/gi,         // Telegram links
-      /https?:\/\/(?:www\.)?\.com\/\S+/gi,                // Generic .com links
-      /https?:\/\/(?:www\.)?twitter\.com\/\S+/gi,         // Twitter links
-      /https?:\/\/(?:www\.)?linkedin\.com\/\S+/gi,        // LinkedIn links
-      /https?:\/\/(?:whatsapp\.com|channel\.me)\/\S+/gi,  // Other WhatsApp/channel links
-      /https?:\/\/(?:www\.)?reddit\.com\/\S+/gi,          // Reddit links
-      /https?:\/\/(?:www\.)?discord\.com\/\S+/gi,         // Discord links
-      /https?:\/\/(?:www\.)?twitch\.tv\/\S+/gi,           // Twitch links
-      /https?:\/\/(?:www\.)?vimeo\.com\/\S+/gi,           // Vimeo links
-      /https?:\/\/(?:www\.)?dailymotion\.com\/\S+/gi,     // Dailymotion links
-      /https?:\/\/(?:www\.)?medium\.com\/\S+/gi           // Medium links
-    ];
+    // 🔥 Universal link detection regex (matches any domain or link)
+    const universalLinkRegex = /\b((https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,})(\/\S*)?/gi;
 
-    // Check if message contains any forbidden links
-    const containsLink = linkPatterns.some(pattern => pattern.test(body));
+    // ✅ Detect group invite links (WhatsApp group)
+    const waGroupRegex = /chat\.whatsapp\.com\/[A-Za-z0-9]+/gi;
 
-    // Only proceed if anti-link is enabled and link is detected
+    // Check if message contains any type of link or domain
+    const containsLink = universalLinkRegex.test(body) || waGroupRegex.test(body);
+
+    // Proceed only if anti-link is enabled
     if (containsLink && config.ANTI_LINK === 'true') {
-      console.log(`Link detected from ${sender}: ${body}`);
+      console.log(`🚫 Link detected from ${sender}: ${body}`);
 
-      // Try to delete the message
+      // 🗑 Try to delete the message
       try {
-        await conn.sendMessage(from, {
-          delete: m.key
-        });
-        console.log(`Message deleted: ${m.key.id}`);
+        await conn.sendMessage(from, { delete: m.key });
+        console.log(`✅ Message deleted: ${m.key.id}`);
       } catch (error) {
-        console.error("Failed to delete message:", error);
+        console.error("❌ Failed to delete message:", error);
       }
 
-      // Direct kick without warnings
+      // ⚠️ Notify and kick user
       await conn.sendMessage(from, {
-        text: `@${sender.split('@')[0]} *HAS BEEN REMOVED - LINKS ARE NOT ALLOWED!*`,
+        text: `🚨 *LINK DETECTED!* 🚨\n\n@${sender.split('@')[0]} sent a forbidden link!\n\n🔒 Links are not allowed in this group.`,
         mentions: [sender]
       });
-      
+
       await conn.groupParticipantsUpdate(from, [sender], "remove");
+
+      console.log(`👢 User removed: ${sender}`);
     }
   } catch (error) {
     console.error("Anti-link error:", error);
-    reply("❌ An error occurred while processing the message.");
+    reply("❌ An error occurred while processing anti-link.");
   }
 });
