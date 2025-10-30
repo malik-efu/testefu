@@ -1,69 +1,101 @@
 const { cmd } = require('../command');
-const config = require("../config");
+const config = require('../config');
+
+// In-memory map to track which groups have Anti-Promote active
+const antiPromoteActive = new Map();
+
+// ensure we register the event listener only once
+let listenerRegistered = false;
 
 cmd({
   pattern: "antipromote",
-  desc: "Automatically demotes both promoter and promoted admins (except bot or owner).",
+  desc: "Toggle Anti-Promote (on/off) — only group admins can toggle. When ON: if an admin promotes someone, both are demoted (bot never demotes itself).",
   category: "security",
   react: "🚫",
   filename: __filename
 },
-async (conn, mek, m, { from, isGroup, isBotAdmins, senderNumber, reply }) => {
+async (conn, mek, m, { from, isGroup, isAdmins, isBotAdmins, senderNumber, reply, args }) => {
   try {
     if (!isGroup) return reply("❌ This command works only in groups.");
-    if (!isBotAdmins) return reply("❌ I need admin rights to manage admins.");
+    if (!isAdmins) return reply("❌ Only group admins can activate or deactivate this feature.");
+    if (!isBotAdmins) return reply("❌ I need admin rights to manage admins in this group.");
 
-    const botOwner = config.OWNER_NUMBER?.replace(/[^0-9]/g, '');
-    const groupMetadata = await conn.groupMetadata(from);
-    const groupOwner = groupMetadata.owner?.split('@')[0];
-
-    // Allow only group owner or bot owner to activate
-    if (senderNumber !== botOwner && senderNumber !== groupOwner) {
-      return reply("❌ Only the group owner or bot owner can activate Anti Promote.");
+    const arg = (args && args[0]) ? args[0].toLowerCase() : null;
+    if (!arg || (arg !== 'on' && arg !== 'off')) {
+      return reply("Usage: .antipromote on  OR  .antipromote off\nOnly group admins can toggle this, and the bot must be admin.");
     }
 
-    // Anti Promote activated
-    reply("✅ *Anti Promote system activated!*\nIf any admin promotes another member, both will be demoted automatically (except bot or owners).");
+    if (arg === 'on') {
+      antiPromoteActive.set(from, true);
+      reply("✅ Anti-Promote is now *ON* for this group. If any admin promotes someone, both will be demoted (bot will never demote itself).");
 
-    // Listen for promotion events
-    conn.ev.on('group-participants.update', async (update) => {
-      if (!update || update.action !== "promote") return;
+      // Register single global listener if not already
+      if (!listenerRegistered) {
+        listenerRegistered = true;
 
-      const groupId = update.id;
-      const promoter = update.author; // The admin who promoted
-      const promotedUser = update.participants[0]; // The new admin
+        conn.ev.on('group-participants.update', async (update) => {
+          try {
+            // only handle promote events
+            if (!update || update.action !== 'promote') return;
 
-      // Get bot number
-      const botNumber = conn.user.id.split(":")[0] + "@s.whatsapp.net";
+            const groupId = update.id;
+            // if feature not active for this group, ignore
+            if (!antiPromoteActive.get(groupId)) return;
 
-      // Ignore if the bot itself is the promoter
-      if (promoter === botNumber) return;
+            const promoter = update.author; // e.g. "12345@s.whatsapp.net"
+            const promotedList = update.participants || [];
+            if (!promotedList.length) return;
 
-      // Ignore if the bot is the one promoted
-      if (promotedUser === botNumber) return;
+            // handle each promoted user (usually one)
+            for (const promotedUser of promotedList) {
+              // bot identity
+              const botJid = conn.user && conn.user.id ? (conn.user.id.split(":")[0] + '@s.whatsapp.net') : null;
 
-      // Ignore if the promoter is the bot owner or group owner
-      if (
-        promoter.includes(botOwner) ||
-        promoter.includes(groupOwner)
-      ) return;
+              // safety: do not act if bot is not admin anymore
+              // (we cannot easily check isBotAdmins here, but attempt demote only if botJid exists)
+              if (!botJid) return;
 
-      console.log(`🚫 Anti Promote Triggered in ${groupId}`);
-      console.log(`Promoter: ${promoter}, Promoted: ${promotedUser}`);
+              // Do not demote if promoter or promotedUser is the bot itself
+              if (promoter === botJid || promotedUser === botJid) {
+                // ignore this event
+                return;
+              }
 
-      // Notify group
-      await conn.sendMessage(groupId, {
-        text: `🚫 *Unauthorized Admin Action Detected!* 🚫\n\n@${promoter.split('@')[0]} tried to promote @${promotedUser.split('@')[0]}.\n\nBoth have been demoted automatically.`,
-        mentions: [promoter, promotedUser]
-      });
+              // Optional: skip if promoter is group owner? (commented out — remove if you WANT to demote even owner)
+              // const metadata = await conn.groupMetadata(groupId);
+              // const groupOwnerJid = metadata.owner;
+              // if (promoter === groupOwnerJid) return;
 
-      // Demote both users
-      await conn.groupParticipantsUpdate(groupId, [promoter, promotedUser], "demote");
-      console.log(`✅ Demoted both: ${promoter}, ${promotedUser}`);
-    });
+              // Announce and demote both
+              try {
+                await conn.sendMessage(groupId, {
+                  text: `🚫 *Anti-Promote Triggered!*\n\n@${promoter.split('@')[0]} promoted @${promotedUser.split('@')[0]}.\nBoth will be demoted automatically.`,
+                  mentions: [promoter, promotedUser]
+                });
+              } catch (e) {
+                // ignore announce errors
+              }
 
+              // demote both promoter and promotedUser
+              try {
+                await conn.groupParticipantsUpdate(groupId, [promoter, promotedUser], "demote");
+                console.log(`Anti-Promote: demoted ${promoter} and ${promotedUser} in ${groupId}`);
+              } catch (err) {
+                console.error("Anti-Promote demotion error:", err);
+              }
+            }
+          } catch (err) {
+            console.error("Anti-Promote listener error:", err);
+          }
+        });
+      }
+
+    } else if (arg === 'off') {
+      antiPromoteActive.delete(from);
+      reply("✅ Anti-Promote is now *OFF* for this group.");
+    }
   } catch (e) {
-    console.error("Anti Promote Error:", e);
-    reply("❌ Error while activating Anti Promote feature.");
+    console.error("Antipromote command error:", e);
+    reply("❌ An error occurred while toggling Anti-Promote.");
   }
 });
