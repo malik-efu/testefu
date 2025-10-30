@@ -8,7 +8,7 @@ const antiPromoteActive = new Map();
 let listenerRegistered = false;
 
 cmd({
-  pattern: "antipromote",
+  pattern: "antipromot",
   desc: "Toggle Anti-Promote (on/off) — only group admins can toggle. When ON: if an admin promotes someone, both are demoted (bot never demotes itself).",
   category: "security",
   react: "🚫",
