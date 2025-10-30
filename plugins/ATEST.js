@@ -1,101 +1,78 @@
 const { cmd } = require('../command');
-const config = require('../config');
-
-// In-memory map to track which groups have Anti-Promote active
-const antiPromoteActive = new Map();
-
-// ensure we register the event listener only once
-let listenerRegistered = false;
+const axios = require('axios');
 
 cmd({
-  pattern: "antipromot",
-  desc: "Toggle Anti-Promote (on/off) — only group admins can toggle. When ON: if an admin promotes someone, both are demoted (bot never demotes itself).",
-  category: "security",
-  react: "🚫",
-  filename: __filename
+    pattern: "dailymotion",
+    alias: ["dm", "dailymo"],
+    desc: "Download Dailymotion video by link or search query",
+    category: "downloader",
+    react: "🎬",
+    filename: __filename
 },
-async (conn, mek, m, { from, isGroup, isAdmins, isBotAdmins, senderNumber, reply, args }) => {
-  try {
-    if (!isGroup) return reply("❌ This command works only in groups.");
-    if (!isAdmins) return reply("❌ Only group admins can activate or deactivate this feature.");
-    if (!isBotAdmins) return reply("❌ I need admin rights to manage admins in this group.");
+async (conn, mek, m, { from, reply, q, args }) => {
+    try {
+        if (!q) return reply("🎯 Please provide a Dailymotion video link or search term.\n\nExample:\n.dailymotion https://www.dailymotion.com/video/x9sw09w\n.dailymotion funny cat video");
 
-    const arg = (args && args[0]) ? args[0].toLowerCase() : null;
-    if (!arg || (arg !== 'on' && arg !== 'off')) {
-      return reply("Usage: .antipromote on  OR  .antipromote off\nOnly group admins can toggle this, and the bot must be admin.");
-    }
+        // Detect if it's a link or search query
+        const isLink = q.includes("dailymotion.com") || q.includes("dai.ly");
+        let videoUrl = q.trim();
 
-    if (arg === 'on') {
-      antiPromoteActive.set(from, true);
-      reply("✅ Anti-Promote is now *ON* for this group. If any admin promotes someone, both will be demoted (bot will never demote itself).");
-
-      // Register single global listener if not already
-      if (!listenerRegistered) {
-        listenerRegistered = true;
-
-        conn.ev.on('group-participants.update', async (update) => {
-          try {
-            // only handle promote events
-            if (!update || update.action !== 'promote') return;
-
-            const groupId = update.id;
-            // if feature not active for this group, ignore
-            if (!antiPromoteActive.get(groupId)) return;
-
-            const promoter = update.author; // e.g. "12345@s.whatsapp.net"
-            const promotedList = update.participants || [];
-            if (!promotedList.length) return;
-
-            // handle each promoted user (usually one)
-            for (const promotedUser of promotedList) {
-              // bot identity
-              const botJid = conn.user && conn.user.id ? (conn.user.id.split(":")[0] + '@s.whatsapp.net') : null;
-
-              // safety: do not act if bot is not admin anymore
-              // (we cannot easily check isBotAdmins here, but attempt demote only if botJid exists)
-              if (!botJid) return;
-
-              // Do not demote if promoter or promotedUser is the bot itself
-              if (promoter === botJid || promotedUser === botJid) {
-                // ignore this event
-                return;
-              }
-
-              // Optional: skip if promoter is group owner? (commented out — remove if you WANT to demote even owner)
-              // const metadata = await conn.groupMetadata(groupId);
-              // const groupOwnerJid = metadata.owner;
-              // if (promoter === groupOwnerJid) return;
-
-              // Announce and demote both
-              try {
-                await conn.sendMessage(groupId, {
-                  text: `🚫 *Anti-Promote Triggered!*\n\n@${promoter.split('@')[0]} promoted @${promotedUser.split('@')[0]}.\nBoth will be demoted automatically.`,
-                  mentions: [promoter, promotedUser]
-                });
-              } catch (e) {
-                // ignore announce errors
-              }
-
-              // demote both promoter and promotedUser
-              try {
-                await conn.groupParticipantsUpdate(groupId, [promoter, promotedUser], "demote");
-                console.log(`Anti-Promote: demoted ${promoter} and ${promotedUser} in ${groupId}`);
-              } catch (err) {
-                console.error("Anti-Promote demotion error:", err);
-              }
+        // If it's a search term, use Dailymotion search API (simple fetch)
+        if (!isLink) {
+            reply("🔍 Searching Dailymotion...");
+            try {
+                const searchRes = await axios.get(`https://api.dailymotion.com/videos?search=${encodeURIComponent(q)}&limit=1`);
+                if (searchRes.data && searchRes.data.list && searchRes.data.list.length > 0) {
+                    videoUrl = `https://www.dailymotion.com/video/${searchRes.data.list[0].id}`;
+                } else {
+                    return reply("❌ No results found on Dailymotion.");
+                }
+            } catch (err) {
+                console.error("Search error:", err);
+                return reply("⚠️ Search failed. Try using a direct Dailymotion link instead.");
             }
-          } catch (err) {
-            console.error("Anti-Promote listener error:", err);
-          }
-        });
-      }
+        }
 
-    } else if (arg === 'off') {
-      antiPromoteActive.delete(from);
-      reply("✅ Anti-Promote is now *OFF* for this group.");
+        reply("⏳ Fetching video data...");
+
+        const apiURL = `https://universe-api-mocha.vercel.app/api/dailymotion/download?url=${encodeURIComponent(videoUrl)}`;
+        const { data } = await axios.get(apiURL, { timeout: 20000 });
+
+        if (!data.success || !data.data) return reply("❌ Failed to fetch video details.");
+
+        const video = data.data;
+        const title = video.title || "Unknown Title";
+        const thumbnail = video.thumbnail || null;
+        const downloads = video.downloads || [];
+
+        if (!downloads.length) return reply("⚠️ No downloadable links found.");
+
+        // Choose best available quality (prefers 1080p, then lower)
+        const qualities = ["2160p", "1440p", "1080p", "720p", "480p", "380p"];
+        let best = downloads.find(v => qualities.includes(v.quality)) || downloads[0];
+
+        // Send preview info
+        let infoMsg = `🎥 *${title}*\n\n📦 Available Qualities:\n`;
+        for (const d of downloads) {
+            infoMsg += `• ${d.quality}\n`;
+        }
+        infoMsg += `\n✅ Sending best quality: *${best.quality}*`;
+
+        if (thumbnail) {
+            await conn.sendMessage(from, { image: { url: thumbnail }, caption: infoMsg });
+        } else {
+            reply(infoMsg);
+        }
+
+        // Send video file
+        await conn.sendMessage(from, {
+            video: { url: best.url },
+            caption: `🎬 *${title}*\nQuality: ${best.quality}\n\nDownloaded via: Dailymotion Downloader`,
+            mimetype: "video/mp4"
+        });
+
+    } catch (e) {
+        console.error("Dailymotion Error:", e);
+        reply("❌ Error fetching Dailymotion video. Try again later.");
     }
-  } catch (e) {
-    console.error("Antipromote command error:", e);
-    reply("❌ An error occurred while toggling Anti-Promote.");
-  }
 });
