@@ -3,7 +3,7 @@ const { sleep } = require('../lib/functions');
 
 // =============== Set My Profile Picture ===============
 cmd({
-    pattern: "setpp",
+    pattern: "setp",
     desc: "Set your WhatsApp profile picture",
     category: "user",
     react: "🖼️",
@@ -23,7 +23,7 @@ async (conn, mek, m, { quoted, reply, mime }) => {
 
 // =============== Set Group Profile Picture ===============
 cmd({
-    pattern: "setgpp",
+    pattern: "setgp",
     desc: "Set the group display picture",
     category: "group",
     react: "🖼️",
