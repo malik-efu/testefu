@@ -1,64 +1,62 @@
-const axios = require("axios");
-const { cmd } = require("../command");
+const fetch = require('node-fetch');
+const { cmd } = require('../command');
 
 cmd({
-  pattern: "npm",
-  desc: "Search for a package on npm.",
-  react: '📦',
-  category: "convert",
-  filename: __filename,
-  use: ".npm <package-name>"
-}, async (conn, mek, msg, { from, args, reply }) => {
-  try {
-    // Check if a package name is provided
-    if (!args.length) {
-      return reply("Please provide the name of the npm package you want to search for. Example: .npm express");
+    pattern: "ss1",
+    alias: ["ssweb", "screenshot"],
+    desc: "Take a screenshot of any website",
+    react: "📸",
+    category: "tools",
+    filename: __filename
+},
+async (conn, mek, m, { from, q, reply }) => {
+    try {
+        // Show usage if no URL provided
+        if (!q) {
+            return reply(
+                `*🖼️ SCREENSHOT TOOL*\n\n` +
+                `Usage:\n` +
+                `> .ss <url>\n` +
+                `> .ssweb <url>\n` +
+                `> .screenshot <url>\n\n` +
+                `Example:\n` +
+                `.ss https://google.com\n` +
+                `.ssweb https://github.com`
+            );
+        }
+
+        const url = q.trim();
+
+        // Validate URL format
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            return reply('❌ Please provide a valid URL starting with http:// or https://');
+        }
+
+        await reply('⏳ Taking screenshot, please wait...');
+
+        // Call Screenshot API
+        const apiUrl = `https://api.siputzx.my.id/api/tools/ssweb?url=${encodeURIComponent(url)}&theme=light&device=desktop`;
+        const response = await fetch(apiUrl, { headers: { 'accept': '*/*' } });
+
+        if (!response.ok) {
+            throw new Error(`API responded with status ${response.status}`);
+        }
+
+        const imageBuffer = await response.buffer();
+
+        // Send Screenshot Image
+        await conn.sendMessage(from, { 
+            image: imageBuffer, 
+            caption: `✅ Screenshot of: ${url}\n\nPowered by: *${conn.user.name || "Your Bot"}*`
+        }, { quoted: mek });
+
+    } catch (error) {
+        console.error('Screenshot command error:', error);
+        await reply(
+            '❌ Failed to take screenshot.\n\nPossible issues:\n' +
+            '• Invalid or unreachable URL\n' +
+            '• Website blocked screenshots\n' +
+            '• API service may be temporarily down'
+        );
     }
-
-    const packageName = args.join(" ");
-    const apiUrl = `https://registry.npmjs.org/${encodeURIComponent(packageName)}`;
-
-    // Fetch package details from npm registry
-    const response = await axios.get(apiUrl);
-    if (response.status !== 200) {
-      throw new Error("Package not found or an error occurred.");
-    }
-
-    const packageData = response.data;
-    const latestVersion = packageData["dist-tags"].latest;
-    const description = packageData.description || "No description available.";
-    const npmUrl = `https://www.npmjs.com/package/${packageName}`;
-    const license = packageData.license || "Unknown";
-    const repository = packageData.repository ? packageData.repository.url : "Not available";
-
-    // Create the response message
-    const message = `
-*DARKZONE NPM SEARCH*
-
-*🔰 NPM PACKAGE:* ${packageName}
-*📄 DESCRIPTION:* ${description}
-*⏸️ LAST VERSION:* ${latestVersion}
-*🪪 LICENSE:* ${license}
-*🪩 REPOSITORY:* ${repository}
-*🔗 NPM URL:* ${npmUrl}
-`;
-
-    // Send the message
-    await conn.sendMessage(from, { text: message }, { quoted: mek });
-
-  } catch (error) {
-    console.error("Error:", error);
-
-    // Send detailed error logs to WhatsApp
-    const errorMessage = `
-*❌ NPM Command Error Logs*
-
-*Error Message:* ${error.message}
-*Stack Trace:* ${error.stack || "Not available"}
-*Timestamp:* ${new Date().toISOString()}
-`;
-
-    await conn.sendMessage(from, { text: errorMessage }, { quoted: mek });
-    reply("An error occurred while fetching the npm package details.");
-  }
 });
