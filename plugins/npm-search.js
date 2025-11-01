@@ -1,49 +1,68 @@
-const fetch = require('node-fetch');
 const { cmd } = require('../command');
+const { sleep } = require('../lib/functions');
 
+// =============== Set My Profile Picture ===============
 cmd({
-    pattern: "sas",
-    alias: ["ssweb", "screenshot"],
-    desc: "Take a live screenshot of any website",
-    react: "📸",
-    category: "tools",
+    pattern: "setpp",
+    desc: "Set your WhatsApp profile picture",
+    category: "user",
+    react: "🖼️",
     filename: __filename
 },
-async (conn, mek, m, { from, q, reply }) => {
+async (conn, mek, m, { quoted, reply, mime }) => {
     try {
-        if (!q) {
-            return reply(
-                `*🌐 SCREENSHOT TOOL*\n\n` +
-                `Usage:\n` +
-                `.ss <url>\n.ssweb <url>\n.screenshot <url>\n\n` +
-                `Example:\n.ss https://google.com`
-            );
-        }
+        if (!quoted || !/image/.test(mime)) return reply("📸 Please reply to an image to set as your profile picture.");
+        let img = await quoted.download();
+        await conn.updateProfilePicture(conn.user.id, img);
+        reply("✅ Successfully updated your profile picture!");
+    } catch (e) {
+        console.error(e);
+        reply("❌ Failed to set profile picture. Make sure the image is valid.");
+    }
+});
 
-        const url = q.trim();
-        if (!url.startsWith('http://') && !url.startsWith('https://')) {
-            return reply('❌ Please provide a valid URL starting with http:// or https://');
-        }
+// =============== Set Group Profile Picture ===============
+cmd({
+    pattern: "setgpp",
+    desc: "Set the group display picture",
+    category: "group",
+    react: "🖼️",
+    filename: __filename
+},
+async (conn, mek, m, { from, isGroup, quoted, reply, mime, sender, isAdmin }) => {
+    try {
+        if (!isGroup) return reply("❌ This command can only be used in groups.");
+        if (!isAdmin) return reply("⚠️ Only group admins can use this command.");
+        if (!quoted || !/image/.test(mime)) return reply("📸 Please reply to an image to set as group profile picture.");
+        let img = await quoted.download();
+        await conn.updateProfilePicture(from, img);
+        reply("✅ Group profile picture updated successfully!");
+    } catch (e) {
+        console.error(e);
+        reply("❌ Failed to update group profile picture.");
+    }
+});
 
-        await reply('⏳ Capturing screenshot, please wait...');
+// =============== Get Bio Command ===============
+cmd({
+    pattern: "getbio",
+    desc: "Get the bio (About) of a mentioned or replied user",
+    category: "info",
+    react: "🔍",
+    filename: __filename
+},
+async (conn, mek, m, { reply, mentionByTag, reply_user }) => {
+    try {
+        let target = mentionByTag && mentionByTag[0]
+            ? mentionByTag[0]
+            : reply_user
+                ? reply_user
+                : m.sender;
 
-        // WORKING API
-        const apiUrl = `https://imageapi.xyz/api/screenshot?url=${encodeURIComponent(url)}`;
-        const response = await fetch(apiUrl);
-
-        if (!response.ok) {
-            throw new Error(`API responded with status ${response.status}`);
-        }
-
-        const imageBuffer = await response.buffer();
-
-        await conn.sendMessage(from, {
-            image: imageBuffer,
-            caption: `✅ Screenshot captured successfully!\n🌍 URL: ${url}`
-        }, { quoted: mek });
-
-    } catch (error) {
-        console.error('Screenshot command error:', error);
-        await reply('❌ Failed to capture screenshot. Please try again later.');
+        let bio = await conn.fetchStatus(target);
+        reply(`🧾 *Bio of @${target.split('@')[0]}:*\n\n${bio?.status || "No bio set."}`, { mentions: [target] });
+    } catch (e) {
+        console.error(e);
+        reply("❌ Couldn't fetch bio. The user might have hidden their 'About' info.");
     }
 });
