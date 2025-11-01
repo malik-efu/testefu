@@ -3,7 +3,7 @@ const { sleep } = require('../lib/functions');
 
 // =============== Set My Profile Picture ===============
 cmd({
-    pattern: "setp",
+    pattern: "sepp",
     desc: "Set your WhatsApp profile picture",
     category: "user",
     react: "🖼️",
