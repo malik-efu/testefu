@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 const { cmd } = require('../command');
 
 cmd({
-    pattern: "sas",
+    pattern: "ss",
     alias: ["ssweb", "screenshot"],
     desc: "Take a live screenshot of any website",
     react: "📸",
@@ -15,21 +15,20 @@ async (conn, mek, m, { from, q, reply }) => {
             return reply(
                 `*🌐 SCREENSHOT TOOL*\n\n` +
                 `Usage:\n` +
-                `> .ss <url>\n> .ssweb <url>\n> .screenshot <url>\n\n` +
+                `.ss <url>\n.ssweb <url>\n.screenshot <url>\n\n` +
                 `Example:\n.ss https://google.com`
             );
         }
 
         const url = q.trim();
-
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
-            return reply('❌ Please provide a valid URL (starting with http:// or https://)');
+            return reply('❌ Please provide a valid URL starting with http:// or https://');
         }
 
-        await reply('⏳ Taking screenshot, please wait...');
+        await reply('⏳ Capturing screenshot, please wait...');
 
-        // Use Thum.io API (no key needed)
-        const apiUrl = `https://image.thum.io/get/fullpage/${encodeURIComponent(url)}`;
+        // WORKING API
+        const apiUrl = `https://imageapi.xyz/api/screenshot?url=${encodeURIComponent(url)}`;
         const response = await fetch(apiUrl);
 
         if (!response.ok) {
@@ -38,13 +37,13 @@ async (conn, mek, m, { from, q, reply }) => {
 
         const imageBuffer = await response.buffer();
 
-        await conn.sendMessage(from, { 
-            image: imageBuffer, 
-            caption: `✅ Screenshot captured successfully!\n\n🌍 URL: ${url}`
+        await conn.sendMessage(from, {
+            image: imageBuffer,
+            caption: `✅ Screenshot captured successfully!\n🌍 URL: ${url}`
         }, { quoted: mek });
 
     } catch (error) {
         console.error('Screenshot command error:', error);
-        await reply('❌ Failed to capture screenshot. Please try again.');
+        await reply('❌ Failed to capture screenshot. Please try again later.');
     }
 });
