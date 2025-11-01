@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 const { cmd } = require('../command');
 
 cmd({
-    pattern: "ss",
+    pattern: "sas",
     alias: ["ssweb", "screenshot"],
     desc: "Take a live screenshot of any website",
     react: "📸",
