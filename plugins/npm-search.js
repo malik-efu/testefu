@@ -1,53 +1,47 @@
-const { cmd } = require("../command");
-const fs = require("fs");
+const { cmd } = require('../command');
+const { Sticker, StickerTypes } = require("wa-sticker-formatter");
+const Config = require('../config');
 
 cmd({
-  pattern: "post1",
-  alias: ["status", "story"],
-  desc: "Post text, photo, or video to WhatsApp status",
-  category: "utility",
-  filename: __filename
-}, async (client, message, match, { isCreator }) => {
-  if (!isCreator) return await message.reply("📛 *Owner-only command!*");
+  pattern: 'sticker',
+  alias: ['sa', 'take', 'stake', 'stickergif'],
+  desc: 'Create or rename a sticker (image, video, or sticker).',
+  category: 'sticker',
+  use: '.sticker <optional pack name>',
+  filename: __filename,
+}, async (conn, mek, m, { quoted, args, q, reply }) => {
 
-  const quoted = message.quoted || message;
+  if (!mek.quoted) return reply("*⚠️ Please reply to an image, video, or sticker.*");
 
   try {
-    // 📝 Text-only status
-    if (quoted.text && !quoted.hasMedia) {
-      await client.sendMessage("status@broadcast", {
-        text: quoted.text
-      });
-      return await message.reply("✅ Text status posted successfully!");
-    }
+    const mime = mek.quoted.mtype;
+    const packName = q ? q.trim() : (Config.STICKER_NAME || "Erfan Ahmad");
+    let media = await mek.quoted.download();
 
-    // 🎥 Photo or Video status
-    if (quoted.hasMedia) {
-      const media = await quoted.download();
-      const caption = quoted.caption || "";
+    if (!media) return reply("❌ Failed to download media.");
 
-      // Detect media type
-      let type = "image";
-      if (quoted.msg && quoted.msg.mimetype) {
-        const mime = quoted.msg.mimetype;
-        if (mime.includes("video")) type = "video";
-        else if (mime.includes("image")) type = "image";
-      }
+    // Choose sticker type
+    let stickerType = StickerTypes.FULL;
 
-      // Send to status
-      await client.sendMessage("status@broadcast", {
-        [type]: media,
-        caption: caption
-      });
+    // 🎨 Create sticker
+    const sticker = new Sticker(media, {
+      pack: packName, // Custom or default pack name
+      author: "Erfan Tech", // You can change this default name
+      type: stickerType,
+      categories: ["🔥", "🎉"],
+      id: "ErfanTech_" + Date.now(),
+      quality: 75,
+      background: 'transparent',
+    });
 
-      return await message.reply(`✅ ${type === "video" ? "Video" : "Image"} status posted successfully!`);
-    }
+    const buffer = await sticker.toBuffer();
 
-    // ⚠ No text or media detected
-    return await message.reply("⚠️ Please reply to some text, image, or video to post it to status.");
+    await conn.sendMessage(mek.chat, { sticker: buffer }, { quoted: mek });
 
-  } catch (error) {
-    console.error("❌ Status error:", error);
-    return await message.reply(`❌ Failed to post status.\n\nError: ${error.message}`);
+    return reply(`✅ Sticker created successfully!\n📦 Pack: *${packName}*`);
+
+  } catch (e) {
+    console.error("❌ Sticker Error:", e);
+    reply("❌ Failed to create sticker. Please try again.");
   }
 });
