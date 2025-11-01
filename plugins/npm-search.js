@@ -1,43 +1,53 @@
-const axios = require("axios");
-const { cmd } = require('../command');
+const { cmd } = require("../command");
+const fs = require("fs");
 
 cmd({
-  pattern: "sas",
-  alias: ["ssweb", "screenshot"],
-  react: "💫",
-  desc: "Capture and download a screenshot of a website.",
-  category: "tools",
-  use: ".sss <link>",
-  filename: __filename,
-}, 
-async (conn, mek, m, {
-  from, q, reply
-}) => {
-  if (!q) return reply("🌐 Please provide a valid website link.\nExample: *.sss https://google.com*");
+  pattern: "post1",
+  alias: ["status", "story"],
+  desc: "Post text, photo, or video to WhatsApp status",
+  category: "utility",
+  filename: __filename
+}, async (client, message, match, { isCreator }) => {
+  if (!isCreator) return await message.reply("📛 *Owner-only command!*");
+
+  const quoted = message.quoted || message;
 
   try {
-    reply("⏳ Capturing screenshot, please wait...");
-
-    // 🧠 API Request
-    const apiURL = `https://api.davidcyriltech.my.id/ssweb?url=${encodeURIComponent(q)}`;
-    const { data } = await axios.get(apiURL);
-
-    // ✅ Adjusted for correct response structure
-    const screenshotUrl = data?.result || data?.image || data?.url;
-
-    if (!screenshotUrl) {
-      console.error("❌ Unexpected API response:", data);
-      return reply("⚠️ Failed to fetch screenshot. API returned empty data.");
+    // 📝 Text-only status
+    if (quoted.text && !quoted.hasMedia) {
+      await client.sendMessage("status@broadcast", {
+        text: quoted.text
+      });
+      return await message.reply("✅ Text status posted successfully!");
     }
 
-    // 📤 Send screenshot
-    await conn.sendMessage(from, {
-      image: { url: screenshotUrl },
-      caption: `✅ *Screenshot Captured Successfully!*\n\n🌍 *URL:* ${q}\n📸 *API by:* Jawad Tech`
-    }, { quoted: m });
+    // 🎥 Photo or Video status
+    if (quoted.hasMedia) {
+      const media = await quoted.download();
+      const caption = quoted.caption || "";
+
+      // Detect media type
+      let type = "image";
+      if (quoted.msg && quoted.msg.mimetype) {
+        const mime = quoted.msg.mimetype;
+        if (mime.includes("video")) type = "video";
+        else if (mime.includes("image")) type = "image";
+      }
+
+      // Send to status
+      await client.sendMessage("status@broadcast", {
+        [type]: media,
+        caption: caption
+      });
+
+      return await message.reply(`✅ ${type === "video" ? "Video" : "Image"} status posted successfully!`);
+    }
+
+    // ⚠ No text or media detected
+    return await message.reply("⚠️ Please reply to some text, image, or video to post it to status.");
 
   } catch (error) {
-    console.error("❌ Screenshot Error:", error);
-    reply("🚫 Failed to capture screenshot. Please try again later.");
+    console.error("❌ Status error:", error);
+    return await message.reply(`❌ Failed to post status.\n\nError: ${error.message}`);
   }
 });
